@@ -49,7 +49,7 @@ const getData = async (collectionName) => {
     const querySnapshot = await getDocs(collection(db, collectionName));
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
-    console.error('Error getting data:', error);
+    console.error('Error getting ', error);
     return [];
   }
 };
@@ -61,7 +61,7 @@ const setData = async (collectionName, data) => {
     console.log('Document written with ID: ', docRef.id);
     return docRef.id;
   } catch (error) {
-    console.error('Error adding data:', error);
+    console.error('Error adding ', error);
     throw error;
   }
 };
@@ -72,7 +72,7 @@ const updateData = async (collectionName, docId, data) => {
     await updateDoc(doc(db, collectionName, docId), cleanData);
     console.log('Document updated with ID: ', docId);
   } catch (error) {
-    console.error('Error updating data:', error);
+    console.error('Error updating ', error);
     throw error;
   }
 };
@@ -82,7 +82,7 @@ const deleteData = async (collectionName, docId) => {
     await deleteDoc(doc(db, collectionName, docId));
     console.log('Document deleted with ID: ', docId);
   } catch (error) {
-    console.error('Error deleting data:', error);
+    console.error('Error deleting ', error);
     throw error;
   }
 };
@@ -175,6 +175,33 @@ function fileToDataURL(file) {
 let selectedSellerId = null;
 let pendingCart = {};
 let lastGeneratedBillIds = [];
+
+// Force refresh all data
+async function forceRefreshAllData() {
+  try {
+    console.log('Force refreshing all data...');
+    
+    // Clear any cached state
+    selectedSellerId = null;
+    pendingCart = {};
+    
+    // Clear UI elements
+    document.getElementById('chatHeader').textContent = 'Select a seller';
+    document.getElementById('chatItems').innerHTML = '<div class="item-meta" style="padding:10px">Select a seller to begin</div>';
+    document.getElementById('chatFooter').innerHTML = '';
+    
+    // Re-render everything with fresh data
+    await renderSellers();
+    await renderPurchaseTab();
+    await renderBillsTab();
+    await renderAnalytics();
+    await updateHeaderStats();
+    
+    console.log('All data refreshed successfully');
+  } catch (error) {
+    console.error('Error refreshing ', error);
+  }
+}
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
@@ -418,8 +445,7 @@ async function handleSellerSubmit(e) {
     }
     
     closeModal('sellerModal');
-    await renderSellers();
-    await renderPurchaseTab();
+    await forceRefreshAllData();
     
   } catch (error) {
     console.error('Error saving seller:', error);
@@ -439,7 +465,7 @@ async function renderSellers() {
     const itemHtml = (s.items || []).map(it => `
       <div class="item-row">
         <img class="item-thumb" 
-             src="${it.photo || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiBmaWxsPSIjMGIxMjIwIi8+Cjx0ZXh0IHg9IjI0IiB5PSIyOCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzk0YTNiOCIgZm9udC1zaXplPSIxMiI+Tm8gSW1hZ2U8L3RleHQ+Cjwvc3ZnPgo='}" 
+             src="${it.photo || 'image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiBmaWxsPSIjMGIxMjIwIi8+Cjx0ZXh0IHg9IjI0IiB5PSIyOCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzk0YTNiOCIgZm9udC1zaXplPSIxMiI+Tm8gSW1hZ2U8L3RleHQ+Cjwvc3ZnPgo='}" 
              alt="${it.name}"
              loading="lazy"/>
         <div>
@@ -486,37 +512,42 @@ window.deleteSeller = async (id) => {
   if (!confirm('Delete this seller? This will also remove all associated purchases.')) return;
   
   try {
-    console.log('Deleting seller with ID:', id);
+    console.log('Starting deletion for seller ID:', id);
     
-    // Delete the seller first
-    await deleteData(COLLECTIONS.SELLERS, id);
+    // Show loading state
+    const deleteBtn = document.querySelector(`button[onclick="deleteSeller('${id}')"]`);
+    if (deleteBtn) {
+      deleteBtn.textContent = 'Deleting...';
+      deleteBtn.disabled = true;
+    }
     
-    // Then delete associated purchases
+    // First, delete associated purchases
+    console.log('Deleting associated purchases...');
     const purchases = await getData(COLLECTIONS.PURCHASES);
     const sellerPurchases = purchases.filter(p => p.sellerId === id);
     
-    console.log('Found', sellerPurchases.length, 'purchases to delete');
+    console.log(`Found ${sellerPurchases.length} purchases to delete`);
     
     for (const purchase of sellerPurchases) {
       await deleteData(COLLECTIONS.PURCHASES, purchase.id);
+      console.log(`Deleted purchase: ${purchase.id}`);
     }
+    
+    // Then delete the seller
+    console.log('Deleting seller...');
+    await deleteData(COLLECTIONS.SELLERS, id);
+    console.log(`Seller ${id} deleted from Firestore`);
     
     // Clear selected seller if it was the deleted one
     if (selectedSellerId === id) {
       selectedSellerId = null;
-      document.getElementById('chatHeader').textContent = 'Select a seller';
-      document.getElementById('chatItems').innerHTML = '<div class="item-meta" style="padding:10px">Select a seller to begin</div>';
-      document.getElementById('chatFooter').innerHTML = '';
     }
     
-    // Refresh all displays
-    await renderSellers();
-    await renderPurchaseTab();
-    await renderBillsTab();
-    await renderAnalytics();
-    await updateHeaderStats();
+    // Force refresh all data
+    await forceRefreshAllData();
     
     alert('Seller deleted successfully!');
+    
   } catch (error) {
     console.error('Error deleting seller:', error);
     alert('Error deleting seller: ' + error.message);
@@ -564,7 +595,7 @@ window.selectSeller = async (id, keepQty = false) => {
     const qty = pendingCart[it.itemId] || 0;
     return `
       <div class="chat-item">
-        <img src="${it.photo || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjMGIxMjIwIi8+Cjx0ZXh0IHg9IjMyIiB5PSIzNiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzk0YTNiOCIgZm9udC1zaXplPSIxMCI+Tm8gSW1hZ2U8L3RleHQ+Cjwvc3ZnPgo='}" 
+        <img src="${it.photo || 'image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjMGIxMjIwIi8+Cjx0ZXh0IHg9IjMyIiB5PSIzNiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzk0YTNiOCIgZm9udC1zaXplPSIxMCI+Tm8gSW1hZ2U8L3RleHQ+Cjwvc3ZnPgo='}" 
              alt="${it.name}"
              loading="lazy"/>
         <div>
@@ -897,12 +928,27 @@ async function updateHeaderStats() {
   document.getElementById('unbilledTotal').textContent = formatRs(unbilledTotal);
 }
 
-// Seed example data
+// Fixed seed function that only runs once ever
 async function seedExampleData() {
+  // Check if we've already seeded data before
+  const hasSeeded = localStorage.getItem('purchase_tracker_seeded');
+  if (hasSeeded) {
+    console.log('Data already seeded previously, skipping...');
+    return;
+  }
+
+  // Also check if any sellers already exist
   const existingSellers = await getData(COLLECTIONS.SELLERS);
-  if (existingSellers.length > 0) return;
+  if (existingSellers.length > 0) {
+    console.log('Sellers already exist, skipping seed...');
+    // Mark as seeded so we don't check again
+    localStorage.setItem('purchase_tracker_seeded', 'true');
+    return;
+  }
 
   try {
+    console.log('Seeding initial example data...');
+    
     await setData(COLLECTIONS.SELLERS, {
       name: 'Seller A',
       contact: '',
@@ -923,13 +969,16 @@ async function seedExampleData() {
       createdAt: new Date().toISOString()
     });
     
-    console.log('Example data seeded successfully');
+    // Mark as seeded so it never runs again
+    localStorage.setItem('purchase_tracker_seeded', 'true');
+    console.log('Example data seeded successfully and marked as completed');
+    
   } catch (error) {
-    console.error('Error seeding data:', error);
+    console.error('Error seeding ', error);
   }
 }
 
-// Debug helper function
+// Debug helper functions
 window.debugFirestore = async () => {
   console.log('=== Firestore Debug Info ===');
   const sellers = await getData(COLLECTIONS.SELLERS);
@@ -941,4 +990,52 @@ window.debugFirestore = async () => {
   console.log('Purchases:', purchases.length);
   console.log('Selected Seller ID:', selectedSellerId);
   console.log('Pending Cart:', pendingCart);
+  console.log('Seeded flag:', localStorage.getItem('purchase_tracker_seeded'));
+};
+
+window.checkSellerExists = async (sellerId) => {
+  console.log('Checking if seller exists in Firebase...');
+  const sellers = await getData(COLLECTIONS.SELLERS);
+  const seller = sellers.find(s => s.id === sellerId);
+  
+  if (seller) {
+    console.log('❌ Seller still exists in Firebase:', seller);
+    return true;
+  } else {
+    console.log('✅ Seller successfully deleted from Firebase');
+    return false;
+  }
+};
+
+window.resetApp = async () => {
+  if (!confirm('This will delete ALL data and reset the app. Are you sure?')) return;
+  
+  try {
+    // Clear local storage
+    localStorage.removeItem('purchase_tracker_seeded');
+    
+    // Delete all sellers
+    const sellers = await getData(COLLECTIONS.SELLERS);
+    for (const seller of sellers) {
+      await deleteData(COLLECTIONS.SELLERS, seller.id);
+    }
+    
+    // Delete all purchases  
+    const purchases = await getData(COLLECTIONS.PURCHASES);
+    for (const purchase of purchases) {
+      await deleteData(COLLECTIONS.PURCHASES, purchase.id);
+    }
+    
+    alert('App reset complete! Refresh the page to start fresh.');
+    location.reload();
+    
+  } catch (error) {
+    console.error('Error resetting app:', error);
+    alert('Error resetting app: ' + error.message);
+  }
+};
+
+window.hardRefresh = () => {
+  console.log('Performing hard refresh...');
+  location.reload();
 };
