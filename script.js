@@ -930,54 +930,10 @@ async function updateHeaderStats() {
 
 // Fixed seed function that only runs once ever
 async function seedExampleData() {
-  // Check if we've already seeded data before
-  const hasSeeded = localStorage.getItem('purchase_tracker_seeded');
-  if (hasSeeded) {
-    console.log('Data already seeded previously, skipping...');
-    return;
-  }
-
-  // Also check if any sellers already exist
-  const existingSellers = await getData(COLLECTIONS.SELLERS);
-  if (existingSellers.length > 0) {
-    console.log('Sellers already exist, skipping seed...');
-    // Mark as seeded so we don't check again
-    localStorage.setItem('purchase_tracker_seeded', 'true');
-    return;
-  }
-
-  try {
-    console.log('Seeding initial example data...');
-    
-    await setData(COLLECTIONS.SELLERS, {
-      name: 'Seller A',
-      contact: '',
-      items: [
-        { itemId: crypto.randomUUID(), name: 'Item 1', price: 110, code: 'A-1', photo: '' },
-        { itemId: crypto.randomUUID(), name: 'Item 2', price: 135, code: 'A-2', photo: '' }
-      ],
-      createdAt: new Date().toISOString()
-    });
-    
-    await setData(COLLECTIONS.SELLERS, {
-      name: 'Seller B',
-      contact: '',
-      items: [
-        { itemId: crypto.randomUUID(), name: 'Item 1', price: 220, code: 'B-1', photo: '' },
-        { itemId: crypto.randomUUID(), name: 'Item 2', price: 330, code: 'B-2', photo: '' }
-      ],
-      createdAt: new Date().toISOString()
-    });
-    
-    // Mark as seeded so it never runs again
-    localStorage.setItem('purchase_tracker_seeded', 'true');
-    console.log('Example data seeded successfully and marked as completed');
-    
-  } catch (error) {
-    console.error('Error seeding ', error);
-  }
+  console.log('Example data seeding is permanently disabled');
+  // This function intentionally does nothing
+  return;
 }
-
 // Debug helper functions
 window.debugFirestore = async () => {
   console.log('=== Firestore Debug Info ===');
