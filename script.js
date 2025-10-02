@@ -49,7 +49,7 @@ const getData = async (collectionName) => {
     const querySnapshot = await getDocs(collection(db, collectionName));
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
-    console.error('Error getting ', error);
+    console.error('Error getting data:', error);
     return [];
   }
 };
@@ -61,7 +61,7 @@ const setData = async (collectionName, data) => {
     console.log('Document written with ID: ', docRef.id);
     return docRef.id;
   } catch (error) {
-    console.error('Error adding ', error);
+    console.error('Error adding data:', error);
     throw error;
   }
 };
@@ -70,8 +70,9 @@ const updateData = async (collectionName, docId, data) => {
   try {
     const cleanData = sanitizeForFirestore(data);
     await updateDoc(doc(db, collectionName, docId), cleanData);
+    console.log('Document updated with ID: ', docId);
   } catch (error) {
-    console.error('Error updating ', error);
+    console.error('Error updating data:', error);
     throw error;
   }
 };
@@ -79,8 +80,9 @@ const updateData = async (collectionName, docId, data) => {
 const deleteData = async (collectionName, docId) => {
   try {
     await deleteDoc(doc(db, collectionName, docId));
+    console.log('Document deleted with ID: ', docId);
   } catch (error) {
-    console.error('Error deleting ', error);
+    console.error('Error deleting data:', error);
     throw error;
   }
 };
@@ -239,21 +241,35 @@ function openSellerModal(seller = null) {
   const modal = document.getElementById('sellerModal');
   modal.classList.remove('hidden');
   
-  // Clear the edit ID if seller is null or invalid
-  const editId = (seller && seller.id) ? seller.id : '';
-  document.getElementById('sellerForm').dataset.editId = editId;
+  const form = document.getElementById('sellerForm');
   
-  document.getElementById('sellerName').value = seller?.name || '';
-  document.getElementById('sellerContact').value = seller?.contact || '';
-  
-  const itemsList = document.getElementById('itemsList');
-  itemsList.innerHTML = '';
-  
-  const items = seller?.items || [];
-  if (items.length > 0) {
-    items.forEach(it => addItemRow(it));
+  if (seller && seller.id) {
+    // EDITING EXISTING SELLER
+    console.log('Opening edit modal for seller:', seller.id, seller.name);
+    form.dataset.editId = seller.id;
+    document.getElementById('sellerName').value = seller.name || '';
+    document.getElementById('sellerContact').value = seller.contact || '';
+    
+    // Clear and populate items
+    const itemsList = document.getElementById('itemsList');
+    itemsList.innerHTML = '';
+    
+    if (seller.items && seller.items.length > 0) {
+      seller.items.forEach(item => addItemRow(item));
+    } else {
+      addItemRow(); // Add one empty row if no items
+    }
   } else {
-    addItemRow(); // Add at least one empty row
+    // CREATING NEW SELLER
+    console.log('Opening new seller modal');
+    form.dataset.editId = '';
+    document.getElementById('sellerName').value = '';
+    document.getElementById('sellerContact').value = '';
+    
+    // Clear and add one empty row
+    const itemsList = document.getElementById('itemsList');
+    itemsList.innerHTML = '';
+    addItemRow();
   }
 }
 
@@ -264,6 +280,12 @@ function closeModal(id) {
 function addItemRow(existing = null) {
   const row = document.createElement('div');
   row.className = 'item-edit-row';
+  
+  // Store existing photo data as a data attribute
+  if (existing?.photo) {
+    row.dataset.existingPhoto = existing.photo;
+  }
+  
   row.innerHTML = `
     <div style="display: flex; flex-direction: column; gap: 4px;">
       <input type="file" accept="image/*"/>
@@ -275,26 +297,25 @@ function addItemRow(existing = null) {
     <button type="button" class="btn-secondary">Remove</button>
   `;
   
-  // Add file change listener to show size info
+  // Add file change listener
   const fileInput = row.querySelector('input[type="file"]');
   const photoInfo = row.querySelector('.photo-info');
   
   fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (file) {
-      photoInfo.textContent = `${file.name} (${formatFileSize(file.size)})`;
-      if (file.size > 10000000) { // 10MB limit for original file
-        photoInfo.style.color = '#ef4444';
-        photoInfo.textContent += ' - Very large, processing may take time';
-      } else {
-        photoInfo.style.color = '#22c55e';
-        photoInfo.textContent += ' - Will be auto-resized';
-      }
+      photoInfo.textContent = `${file.name} (${formatFileSize(file.size)}) - Will be auto-resized`;
+      photoInfo.style.color = '#22c55e';
+      // Clear existing photo data when new file is selected
+      row.dataset.existingPhoto = '';
     } else if (existing?.photo) {
       photoInfo.textContent = 'Has existing photo';
       photoInfo.style.color = '#94a3b8';
+      // Restore existing photo data
+      row.dataset.existingPhoto = existing.photo;
     } else {
       photoInfo.textContent = '';
+      row.dataset.existingPhoto = '';
     }
   });
   
@@ -314,7 +335,7 @@ async function handleSellerSubmit(e) {
   // Show processing message
   const submitBtn = e.target.querySelector('button[type="submit"]');
   const originalText = submitBtn.textContent;
-  submitBtn.textContent = 'Processing photos...';
+  submitBtn.textContent = 'Processing...';
   submitBtn.disabled = true;
   
   try {
@@ -327,7 +348,10 @@ async function handleSellerSubmit(e) {
       if (!nameInput.value.trim()) continue;
       
       let photoData = '';
+      
       if (file) {
+        // New photo uploaded
+        submitBtn.textContent = 'Processing photos...';
         try {
           photoData = await fileToDataURL(file);
         } catch (error) {
@@ -336,10 +360,13 @@ async function handleSellerSubmit(e) {
           submitBtn.disabled = false;
           return;
         }
+      } else if (r.dataset.existingPhoto) {
+        // Keep existing photo
+        photoData = r.dataset.existingPhoto;
       }
       
       items.push({ 
-        itemId: crypto.randomUUID(),
+        itemId: crypto.randomUUID(), // Always generate new itemId for consistency
         name: nameInput.value.trim(), 
         price: Number(priceInput.value) || 0,
         code: codeInput.value.trim(),
@@ -366,7 +393,10 @@ async function handleSellerSubmit(e) {
     };
     
     if (editId && editId.trim() !== '') {
-      // Check if document exists before updating
+      // EDITING EXISTING SELLER
+      console.log('Updating seller with ID:', editId);
+      
+      // Verify seller exists
       const sellers = await getData(COLLECTIONS.SELLERS);
       const existingSeller = sellers.find(s => s.id === editId);
       
@@ -374,14 +404,14 @@ async function handleSellerSubmit(e) {
         await updateData(COLLECTIONS.SELLERS, editId, sellerData);
         alert('Seller updated successfully!');
       } else {
-        // Document doesn't exist, create new one instead
-        console.log('Document not found, creating new seller instead');
+        console.log('Seller not found, creating new one');
         sellerData.createdAt = new Date().toISOString();
         await setData(COLLECTIONS.SELLERS, sellerData);
-        alert('Seller created successfully!');
+        alert('Seller created (original not found)!');
       }
     } else {
-      // Creating new seller
+      // CREATING NEW SELLER
+      console.log('Creating new seller');
       sellerData.createdAt = new Date().toISOString();
       await setData(COLLECTIONS.SELLERS, sellerData);
       alert('Seller created successfully!');
@@ -393,30 +423,7 @@ async function handleSellerSubmit(e) {
     
   } catch (error) {
     console.error('Error saving seller:', error);
-    
-    // If it's an update error, try creating a new document instead
-    if (error.message.includes('No document to update')) {
-      try {
-        console.log('Retrying as new document...');
-        const sellerData = {
-          name: name,
-          contact: contact,
-          items: items,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-        await setData(COLLECTIONS.SELLERS, sellerData);
-        alert('Seller saved successfully!');
-        closeModal('sellerModal');
-        await renderSellers();
-        await renderPurchaseTab();
-      } catch (retryError) {
-        console.error('Retry failed:', retryError);
-        alert('Error saving seller: ' + retryError.message);
-      }
-    } else {
-      alert('Error saving seller: ' + error.message);
-    }
+    alert('Error saving seller: ' + error.message);
   } finally {
     submitBtn.textContent = originalText;
     submitBtn.disabled = false;
@@ -432,7 +439,7 @@ async function renderSellers() {
     const itemHtml = (s.items || []).map(it => `
       <div class="item-row">
         <img class="item-thumb" 
-             src="${it.photo || 'image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiBmaWxsPSIjMGIxMjIwIi8+Cjx0ZXh0IHg9IjI0IiB5PSIyOCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzk0YTNiOCIgZm9udC1zaXplPSIxMiI+Tm8gSW1hZ2U8L3RleHQ+Cjwvc3ZnPgo='}" 
+             src="${it.photo || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiBmaWxsPSIjMGIxMjIwIi8+Cjx0ZXh0IHg9IjI0IiB5PSIyOCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzk0YTNiOCIgZm9udC1zaXplPSIxMiI+Tm8gSW1hZ2U8L3RleHQ+Cjwvc3ZnPgo='}" 
              alt="${it.name}"
              loading="lazy"/>
         <div>
@@ -464,6 +471,7 @@ async function renderSellers() {
 
 // Global functions for onclick handlers
 window.editSeller = async (id) => {
+  console.log('Edit clicked for seller ID:', id);
   const sellers = await getData(COLLECTIONS.SELLERS);
   const s = sellers.find(x => x.id === id);
   if (!s) {
@@ -478,19 +486,37 @@ window.deleteSeller = async (id) => {
   if (!confirm('Delete this seller? This will also remove all associated purchases.')) return;
   
   try {
+    console.log('Deleting seller with ID:', id);
+    
+    // Delete the seller first
     await deleteData(COLLECTIONS.SELLERS, id);
     
-    // Also delete associated purchases
+    // Then delete associated purchases
     const purchases = await getData(COLLECTIONS.PURCHASES);
     const sellerPurchases = purchases.filter(p => p.sellerId === id);
+    
+    console.log('Found', sellerPurchases.length, 'purchases to delete');
+    
     for (const purchase of sellerPurchases) {
       await deleteData(COLLECTIONS.PURCHASES, purchase.id);
     }
     
+    // Clear selected seller if it was the deleted one
+    if (selectedSellerId === id) {
+      selectedSellerId = null;
+      document.getElementById('chatHeader').textContent = 'Select a seller';
+      document.getElementById('chatItems').innerHTML = '<div class="item-meta" style="padding:10px">Select a seller to begin</div>';
+      document.getElementById('chatFooter').innerHTML = '';
+    }
+    
+    // Refresh all displays
     await renderSellers();
     await renderPurchaseTab();
+    await renderBillsTab();
+    await renderAnalytics();
     await updateHeaderStats();
-    alert('Seller and associated data deleted successfully.');
+    
+    alert('Seller deleted successfully!');
   } catch (error) {
     console.error('Error deleting seller:', error);
     alert('Error deleting seller: ' + error.message);
@@ -538,7 +564,7 @@ window.selectSeller = async (id, keepQty = false) => {
     const qty = pendingCart[it.itemId] || 0;
     return `
       <div class="chat-item">
-        <img src="${it.photo || 'image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjMGIxMjIwIi8+Cjx0ZXh0IHg9IjMyIiB5PSIzNiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzk0YTNiOCIgZm9udC1zaXplPSIxMCI+Tm8gSW1hZ2U8L3RleHQ+Cjwvc3ZnPgo='}" 
+        <img src="${it.photo || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjMGIxMjIwIi8+Cjx0ZXh0IHg9IjMyIiB5PSIzNiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzk0YTNiOCIgZm9udC1zaXplPSIxMCI+Tm8gSW1hZ2U8L3RleHQ+Cjwvc3ZnPgo='}" 
              alt="${it.name}"
              loading="lazy"/>
         <div>
@@ -899,7 +925,7 @@ async function seedExampleData() {
     
     console.log('Example data seeded successfully');
   } catch (error) {
-    console.error('Error seeding ', error);
+    console.error('Error seeding data:', error);
   }
 }
 
