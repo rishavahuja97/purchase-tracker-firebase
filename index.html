@@ -1,0 +1,145 @@
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Purchase Tracker</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Purchase Tracker</h1>
+      <div class="header-stats">
+        <div class="stat-card">
+          <h3>This Week</h3>
+          <p id="weekTotal">₹0</p>
+        </div>
+        <div class="stat-card">
+          <h3>Unbilled</h3>
+          <p id="unbilledTotal">₹0</p>
+        </div>
+        <div class="stat-card">
+          <h3>This Month</h3>
+          <p id="monthTotal">₹0</p>
+        </div>
+      </div>
+    </header>
+
+    <nav class="nav-tabs">
+      <button class="tab-btn active" data-tab="sellers">Sellers</button>
+      <button class="tab-btn" data-tab="purchase">Make Purchase</button>
+      <button class="tab-btn" data-tab="bills">Bills</button>
+      <button class="tab-btn" data-tab="analytics">Analytics</button>
+    </nav>
+
+    <section id="sellers" class="tab-content active">
+      <div class="section-header">
+        <h2>Manage Sellers</h2>
+        <button id="addSellerBtn" class="btn-primary">+ Add Seller</button>
+      </div>
+      <div id="sellersList" class="sellers-grid"></div>
+    </section>
+
+    <section id="purchase" class="tab-content">
+      <div class="section-header">
+        <h2>Make Purchase</h2>
+        <div class="date-selector">
+          <label>Purchase Date:</label>
+          <input type="date" id="purchaseDate"/>
+        </div>
+      </div>
+      <div class="chat-layout">
+        <aside class="seller-list" id="sellerListPanel"></aside>
+        <main class="chat-panel">
+          <div class="chat-header" id="chatHeader">Select a seller</div>
+          <div class="chat-items" id="chatItems"></div>
+          <div class="chat-footer" id="chatFooter"></div>
+        </main>
+      </div>
+    </section>
+
+    <section id="bills" class="tab-content">
+      <div class="section-header">
+        <h2>Bills & Reports</h2>
+        <div class="bill-controls">
+          <select id="billPeriod">
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+            <option value="custom">Custom Range</option>
+          </select>
+          <input type="date" id="fromDate" class="hidden"/>
+          <input type="date" id="toDate" class="hidden"/>
+          <button id="generateBillBtn" class="btn-primary">Generate Bill</button>
+        </div>
+      </div>
+      <div id="billsContainer"></div>
+    </section>
+
+    <section id="analytics" class="tab-content">
+      <div class="section-header">
+        <h2>Purchase Analytics</h2>
+      </div>
+      <div class="analytics-grid">
+        <div class="analytics-card">
+          <h3>Weekly Purchases</h3>
+          <div id="weeklySummary"></div>
+        </div>
+        <div class="analytics-card">
+          <h3>Top Sellers</h3>
+          <div id="topSellers"></div>
+        </div>
+        <div class="analytics-card">
+          <h3>Unbilled by Seller</h3>
+          <div id="unbilledBySeller"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="sellerModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Add / Edit Seller</h2>
+        <button class="close-modal" data-close="sellerModal">×</button>
+      </div>
+      <form id="sellerForm">
+        <div class="form-group">
+          <label>Seller Name</label>
+          <input type="text" id="sellerName" required/>
+        </div>
+        <div class="form-group">
+          <label>Contact (optional)</label>
+          <input type="text" id="sellerContact"/>
+        </div>
+        <div class="items-section">
+          <div class="items-header">
+            <h3>Items Sold</h3>
+            <button type="button" id="addItemRow" class="btn-secondary">+ Add Item</button>
+          </div>
+          <div id="itemsList"></div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" data-close="sellerModal">Cancel</button>
+          <button type="submit" class="btn-primary">Save Seller</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="billModal" class="modal hidden">
+    <div class="modal-content bill-modal">
+      <div class="modal-header">
+        <h2>Bill Preview</h2>
+        <button class="close-modal" data-close="billModal">×</button>
+      </div>
+      <div id="billPreview" class="bill-preview"></div>
+      <div class="modal-actions">
+        <button id="downloadPdfBtn" class="btn-primary">Download PDF</button>
+        <button id="markBilledBtn" class="btn-success">Mark as Billed</button>
+      </div>
+    </div>
+  </div>
+
+<script type="module" src="script.js"></script></body>
+</html>
